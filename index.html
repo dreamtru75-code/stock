@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>식생활교육관 재고관리 시스템</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800;900&display=swap');
+        
+        body { 
+            font-family: 'Pretendard', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            user-select: none; 
+            background-color: #f8fafc;
+        }
+
+        .animate-in { 
+            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
+
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        @media print { 
+            .no-print { display: none !important; } 
+            body { background: white !important; }
+            main { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
+            .print-grid { 
+                display: grid !important;
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important; 
+                gap: 0.5rem !important;
+            }
+            .print-item {
+                border-bottom: 1px solid #e2e8f0 !important;
+                padding: 0.375rem 0.75rem !important;
+                border-radius: 0 !important;
+            }
+        }
+
+        /* 버튼 위치 고정 */
+        #floating-save-btn {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 40;
+        }
+    </style>
+</head>
+<body class="pb-20">
+    <div id="app">
+        <!-- Header -->
+        <header class="bg-slate-900 text-white p-4 sticky top-0 z-50 shadow-xl no-print">
+            <div class="max-w-xl mx-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                            <i data-lucide="package" class="text-white w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-lg font-black tracking-tight leading-none">식생활교육관</h1>
+                            <p class="text-[9px] text-slate-500 font-medium mt-1 tracking-tight">dikin@naver.com</p>
+                        </div>
+                    </div>
+                    <div class="flex bg-slate-800 p-1 rounded-xl border border-slate-700/50">
+                        <button id="btn-input-mode" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-500 text-white shadow-md">입력</button>
+                        <button id="btn-report-mode" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-slate-200">영양교사</button>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="relative flex-grow">
+                        <div id="date-icon" class="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 pointer-events-none">
+                            <i data-lucide="clock" size="16"></i>
+                        </div>
+                        <div id="date-display-container">
+                            <!-- Date input or text will be injected here -->
+                        </div>
+                    </div>
+                    
+                    <div id="status-badge" class="flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-500 bg-emerald-500/10 border-emerald-500/50 text-emerald-400">
+                        <div id="status-dot" class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                        <span id="status-text" class="text-[11px] font-black whitespace-nowrap">동기화됨</span>
+                    </div>
+                    
+                    <button id="btn-settings" class="hidden p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 hover:bg-slate-700 active:scale-95 transition-all">
+                        <i data-lucide="settings" size="20"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Floating Button (Save only) -->
+        <button id="floating-save-btn" onclick="saveData()" class="no-print group flex flex-col items-center gap-1 bg-white border-2 border-slate-200 p-3 rounded-2xl shadow-xl active:scale-90 transition-all">
+            <div id="save-icon-container" class="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-lg transition-all duration-300">
+                <i id="save-icon" data-lucide="save" size="20"></i>
+            </div>
+            <span id="save-btn-text" class="text-[10px] font-black text-slate-400 group-hover:text-emerald-600">저장</span>
+        </button>
+
+        <!-- Main Content -->
+        <main id="main-content" class="max-w-2xl mx-auto p-3 animate-in print:max-w-full print:p-0">
+            <!-- Content will be injected by JavaScript -->
+        </main>
+
+        <!-- Modals -->
+        <div id="modal-container"></div>
+    </div>
+
+    <script>
+        // --- Data ---
+        const BASE_ITEMS = ["양조간장", "고추장", "된장", "쌈장", "춘장", "국간장", "굴소스", "콩기름", "볶은참깨", "참기름", "고춧가루", "설탕", "굵은소금", "구운소금", "물엿", "식초", "맛술", "후추", "매실액기스", "밀가루", "빵가루", "전분", "찹쌀가루", "부침가루", "튀김가루", "치킨튀김가루", "카레가루", "자장가루", "하이스가루", "마요네즈", "케첩", "들깨가루", "올리브유", "멸치액젓", "새우젓", "우동", "소면", "당면", "조미김가루", "올리고당", "파마산치즈", "배추김치"];
+        const SUB_CATEGORIES = {
+            "허브류": ["월계수잎", "파슬리", "통계피", "통후추", "바질", "팔각", "정향", "계피가루", "오레가노", "로즈마리"],
+            "드레싱": ["허니머스타드", "오리엔탈", "발사믹", "발사믹글레이즈", "칠리소스", "핫소스"]
+        };
+        const INPUT_NUMBERS = [0, 0.5, 1, 2, 3, 4, 5, 6, 7];
+        const LIMITED_NUMBERS = [0, 0.5, 1, 2];
+
+        // --- State ---
+        let state = {
+            mode: 'input',
+            selectedDate: new Date().toISOString().split('T')[0],
+            inventory: {},
+            customItems: JSON.parse(localStorage.getItem('school_custom_items') || '[]'),
+            schoolName: localStorage.getItem('school_name') || '행복초등학교',
+            activeKeypad: null,
+            currentModal: null,
+            isSaving: false,
+            hasChanges: false
+        };
+
+        function setState(updates) {
+            state = { ...state, ...updates };
+            render();
+        }
+
+        // --- Actions ---
+        function loadInventory(date) {
+            const saved = localStorage.getItem(`inv_${date}`);
+            setState({ inventory: saved ? JSON.parse(saved) : {}, hasChanges: false });
+        }
+
+        function saveData() {
+            if (state.isSaving) return;
+            setState({ isSaving: true });
+            
+            localStorage.setItem(`inv_${state.selectedDate}`, JSON.stringify(state.inventory));
+            localStorage.setItem('school_custom_items', JSON.stringify(state.customItems));
+            localStorage.setItem('school_name', state.schoolName);
+            
+            setTimeout(() => {
+                setState({ isSaving: false, hasChanges: false });
+            }, 800);
+        }
+
+        window.saveData = saveData;
+
+        let autoSaveTimer;
+        function triggerAutoSave() {
+            setState({ hasChanges: true });
+            clearTimeout(autoSaveTimer);
+            // 20초 뒤 자동저장
+            autoSaveTimer = setTimeout(saveData, 20000);
+        }
+
+        function resetCurrentInventory() {
+            if(confirm('현재 날짜의 모든 재고 데이터를 초기화할까요?')) {
+                state.inventory = {};
+                setState({ inventory: {} });
+                triggerAutoSave();
+            }
+        }
+        window.resetCurrentInventory = resetCurrentInventory;
+
+        // --- UI Rendering ---
+        function render() {
+            const main = document.getElementById('main-content');
+            const btnInput = document.getElementById('btn-input-mode');
+            const btnReport = document.getElementById('btn-report-mode');
+            const dateIcon = document.getElementById('date-icon');
+            const dateDisplay = document.getElementById('date-display-container');
+            const statusBadge = document.getElementById('status-badge');
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            const btnSettings = document.getElementById('btn-settings');
+            const floatingSaveBtn = document.getElementById('floating-save-btn');
+            const saveIconContainer = document.getElementById('save-icon-container');
+            const saveBtnText = document.getElementById('save-btn-text');
+
+            if (!main) return;
+
+            btnInput.className = `px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${state.mode === 'input' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`;
+            btnReport.className = `px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${state.mode === 'report' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`;
+            
+            dateIcon.innerHTML = `<i data-lucide="${state.mode === 'input' ? 'clock' : 'calendar'}" size="16"></i>`;
+            
+            if (state.mode === 'input') {
+                dateDisplay.innerHTML = `<div class="w-full bg-slate-800/50 border border-slate-700/30 rounded-xl py-2.5 pl-10 pr-4 text-sm font-black text-emerald-400 flex items-center">오늘: ${state.selectedDate}</div>`;
+                btnSettings.classList.add('hidden');
+                floatingSaveBtn.classList.remove('hidden');
+            } else {
+                dateDisplay.innerHTML = `<input type="date" id="date-picker" value="${state.selectedDate}" class="w-full bg-slate-800 border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-all appearance-none text-white" style="color-scheme: dark;">`;
+                btnSettings.classList.remove('hidden');
+                floatingSaveBtn.classList.add('hidden');
+                const picker = document.getElementById('date-picker');
+                if (picker) {
+                    picker.onchange = (e) => {
+                        const newDate = e.target.value;
+                        setState({ selectedDate: newDate });
+                        loadInventory(newDate);
+                    };
+                }
+            }
+
+            // 상태 처리 및 버튼 색상 변화
+            if (state.isSaving) {
+                statusBadge.className = "flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-500 bg-amber-500/10 border-amber-500/50 text-amber-500";
+                statusDot.className = "w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin";
+                statusText.innerText = "저장 중";
+                
+                saveIconContainer.className = "w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-amber-500/20 animate-spin";
+                saveBtnText.innerText = "진행중";
+                saveBtnText.className = "text-[10px] font-black text-amber-600";
+            } else if (state.hasChanges) {
+                statusBadge.className = "flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-500 bg-blue-500/10 border-blue-500/50 text-blue-400";
+                statusDot.className = "w-2 h-2 rounded-full bg-blue-400 animate-pulse";
+                statusText.innerText = "입력 대기(20초)";
+
+                saveIconContainer.className = "w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/40 animate-bounce";
+                saveBtnText.innerText = "대기중";
+                saveBtnText.className = "text-[10px] font-black text-blue-600";
+            } else {
+                statusBadge.className = "flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-500 bg-emerald-500/10 border-emerald-500/50 text-emerald-400";
+                statusDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+                statusText.innerText = "동기화됨";
+
+                saveIconContainer.className = "w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20";
+                saveBtnText.innerText = "완료";
+                saveBtnText.className = "text-[10px] font-black text-slate-400";
+            }
+
+            if (state.mode === 'input') {
+                renderInputMode(main);
+            } else {
+                renderReportMode(main);
+            }
+
+            renderModals();
+            lucide.createIcons();
+        }
+
+        function renderInputMode(container) {
+            const allItems = [...BASE_ITEMS, ...Object.keys(SUB_CATEGORIES), ...state.customItems];
+            let html = `
+                <div class="space-y-4">
+                    <div class="flex justify-between items-end px-1">
+                        <div>
+                            <h2 class="text-xl font-black text-slate-900 tracking-tighter">학교급식 식재료 재고 관리</h2>
+                            <p class="text-[10px] text-slate-500 font-bold mt-0.5">수량을 입력하세요. (20초 후 자동저장)</p>
+                        </div>
+                        <div class="flex gap-1.5">
+                            <button onclick="window.resetCurrentInventory()" class="w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-rose-500 transition-colors active:scale-90 shadow-sm">
+                                <i data-lucide="rotate-ccw" size="16"></i>
+                            </button>
+                            <button id="btn-add-item" onclick="window.showModal('add-item')" class="w-9 h-9 flex items-center justify-center bg-slate-900 text-white rounded-lg shadow-lg active:scale-90 transition-all">
+                                <i data-lucide="plus" size="20"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-5 gap-2">
+            `;
+
+            allItems.forEach(item => {
+                const isSubGroup = !!SUB_CATEGORIES[item];
+                const isCustom = state.customItems.includes(item);
+                let val = isSubGroup ? SUB_CATEGORIES[item].reduce((acc, s) => acc + (state.inventory[s] || 0), 0) : (state.inventory[item] || 0);
+                const isActive = val > 0;
+
+                html += `
+                    <div onclick="window.openKeypad('${item}')" class="relative aspect-square flex flex-col items-center justify-center p-1.5 rounded-2xl border-2 transition-all cursor-pointer active:scale-95 group ${isActive ? 'bg-white border-black shadow-md' : 'bg-white border-slate-100 shadow-sm'}">
+                        <span class="text-[12px] font-black text-center leading-none mb-1 break-keep ${isActive ? 'text-black' : 'text-slate-400'}">${item}</span>
+                        <span class="text-2xl font-black tracking-tighter ${isActive ? 'text-black' : 'text-slate-100'}">${val % 1 === 0 ? val : val.toFixed(1)}</span>
+                        ${isCustom ? `<button onclick="event.stopPropagation(); window.deleteItem('${item}')" class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center border border-white shadow-md hover:scale-110 opacity-0 group-hover:opacity-100 transition-all"><i data-lucide="x" style="width:10px; height:10px;" stroke-width="3"></i></button>` : ''}
+                        ${isSubGroup ? `<div class="absolute bottom-1 flex gap-0.5"><div class="w-1 h-1 rounded-full bg-black/20"></div><div class="w-1 h-1 rounded-full bg-black/20"></div></div>` : ''}
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+            container.innerHTML = html;
+        }
+
+        function renderReportMode(container) {
+            const allMainItems = [...BASE_ITEMS, ...state.customItems];
+            let html = `
+                <div class="space-y-4 animate-in print:space-y-2">
+                    <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl shadow-slate-200/50 text-center relative overflow-hidden print:shadow-none print:border-none print:p-2">
+                        <div class="absolute top-0 left-0 w-full h-1.5 bg-emerald-500 no-print"></div>
+                        <div class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black mb-2 uppercase tracking-wider print:bg-transparent print:text-black">
+                            ${state.schoolName}
+                        </div>
+                        <h1 class="text-2xl font-black text-slate-900 tracking-tighter print:text-xl">식재료 재고 현황</h1>
+                        <p class="text-slate-500 font-bold mt-1 flex items-center justify-center gap-1.5 print:text-xs">
+                            <i data-lucide="calendar" size="14" class="text-emerald-500 no-print"></i> ${state.selectedDate} 기준
+                        </p>
+                        <div class="flex flex-wrap justify-center gap-2 mt-6 no-print">
+                            <button onclick="window.print()" class="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-2xl font-black text-sm active:scale-95 transition-all shadow-xl">
+                                <i data-lucide="printer" size="18"></i> 현황 출력
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 print-grid">
+            `;
+
+            allMainItems.forEach(item => {
+                const val = state.inventory[item] || 0;
+                html += `
+                    <div class="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-100 shadow-sm print-item">
+                        <span class="font-bold text-slate-700 print:text-[11px]">${item}</span>
+                        <span class="text-lg font-black print:text-sm ${val > 0 ? 'text-black' : 'text-slate-200'}">${val}</span>
+                    </div>
+                `;
+            });
+
+            Object.entries(SUB_CATEGORIES).forEach(([cat, subs]) => {
+                html += `<div class="col-span-2 px-1 py-1 mt-2 flex items-center gap-2 text-emerald-500 font-black text-xs uppercase tracking-widest border-b border-emerald-100 print:text-[10px]">${cat}</div>`;
+                subs.forEach(sub => {
+                    const val = state.inventory[sub] || 0;
+                    html += `
+                        <div class="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-100 shadow-sm print-item">
+                            <span class="font-bold text-slate-700 print:text-[11px]">${sub}</span>
+                            <span class="text-lg font-black print:text-sm ${val > 0 ? 'text-black' : 'text-slate-200'}">${val}</span>
+                        </div>
+                    `;
+                });
+            });
+
+            html += `</div></div>`;
+            container.innerHTML = html;
+        }
+
+        window.showModal = (id) => setState({ currentModal: id });
+        window.closeModal = () => setState({ currentModal: null });
+        window.openKeypad = (item) => setState({ activeKeypad: item });
+        window.updateValue = (item, val) => {
+            const newInv = { ...state.inventory, [item]: val };
+            const isSubGroup = !!SUB_CATEGORIES[state.activeKeypad];
+            setState({ inventory: newInv, activeKeypad: isSubGroup ? state.activeKeypad : null });
+            triggerAutoSave();
+        };
+
+        window.deleteItem = (item) => {
+            if(confirm(`'${item}' 품목을 삭제하시겠습니까?`)) {
+                const newCustom = state.customItems.filter(i => i !== item);
+                const newInv = { ...state.inventory };
+                delete newInv[item];
+                setState({ customItems: newCustom, inventory: newInv });
+                triggerAutoSave();
+            }
+        };
+
+        function renderModals() {
+            const container = document.getElementById('modal-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (state.activeKeypad) {
+                const item = state.activeKeypad;
+                const subItems = SUB_CATEGORIES[item];
+                const nums = (item === "허브류" || item === "드레싱") ? LIMITED_NUMBERS : INPUT_NUMBERS;
+
+                let html = `
+                    <div class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 no-print">
+                        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in" onclick="setState({activeKeypad: null})"></div>
+                        <div class="relative bg-white w-full max-w-sm rounded-t-[2rem] sm:rounded-[2rem] p-6 pb-10 shadow-2xl animate-in bottom-0">
+                            <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
+                            <div class="flex justify-between items-start mb-6">
+                                <div>
+                                    <span class="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1 block">수량 입력</span>
+                                    <h3 class="text-xl font-black text-slate-900">${item}</h3>
+                                </div>
+                                <button onclick="setState({activeKeypad: null})" class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
+                                    <i data-lucide="x" stroke-width="3" size="20"></i>
+                                </button>
+                            </div>
+                            <div class="${subItems ? 'space-y-3 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar' : 'grid grid-cols-3 gap-3'}">
+                `;
+
+                if (subItems) {
+                    subItems.forEach(sub => {
+                        html += `
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                                <span class="font-black text-slate-800 text-sm">${sub}</span>
+                                <div class="grid grid-cols-4 gap-2">
+                                    ${nums.map(n => `<button onclick="window.updateValue('${sub}', ${n})" class="py-3 rounded-xl text-xs font-black border-2 ${state.inventory[sub] === n ? 'bg-black border-black text-white' : 'bg-white border-slate-200 text-slate-400'}">${n}</button>`).join('')}
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    nums.forEach(n => {
+                        html += `<button onclick="window.updateValue('${item}', ${n})" class="h-16 rounded-2xl text-xl font-black border-2 ${state.inventory[item] === n ? 'bg-black text-white border-black shadow-xl' : 'bg-slate-50 text-slate-600 border-slate-100'}">${n}</button>`;
+                    });
+                }
+
+                html += `</div></div></div>`;
+                container.innerHTML = html;
+            }
+
+            if (state.currentModal === 'settings') {
+                container.innerHTML = `
+                    <div class="fixed inset-0 z-[100] flex items-center justify-center p-6 no-print">
+                        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm animate-in" onclick="window.closeModal()"></div>
+                        <div class="relative bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl animate-in text-center">
+                            <h3 class="text-xl font-black text-slate-900 mb-2">기관 정보 설정</h3>
+                            <input type="text" id="setting-school-name" value="${state.schoolName}" class="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black text-lg text-center focus:border-emerald-500 transition-all">
+                            <button onclick="window.saveSettings()" class="w-full mt-8 py-4 bg-slate-900 text-white font-black rounded-2xl shadow-xl">저장</button>
+                        </div>
+                    </div>
+                `;
+            } else if (state.currentModal === 'add-item') {
+                container.innerHTML = `
+                    <div class="fixed inset-0 z-[100] flex items-center justify-center p-6 no-print">
+                        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm animate-in" onclick="window.closeModal()"></div>
+                        <div class="relative bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl animate-in">
+                            <h3 class="text-xl font-black text-slate-900 mb-4 text-center">품목 추가</h3>
+                            <input type="text" id="new-item-name" placeholder="품목 이름" class="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black text-center">
+                            <div class="flex gap-3 mt-6">
+                                <button onclick="window.closeModal()" class="flex-1 py-4 bg-slate-100 text-slate-400 font-bold rounded-2xl">취소</button>
+                                <button onclick="window.addNewItem()" class="flex-1 py-4 bg-emerald-500 text-white font-black rounded-2xl">추가</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        window.saveSettings = () => {
+            const input = document.getElementById('setting-school-name');
+            if (input) {
+                const name = input.value;
+                setState({ schoolName: name, currentModal: null });
+                triggerAutoSave();
+            }
+        };
+
+        window.addNewItem = () => {
+            const input = document.getElementById('new-item-name');
+            if (input) {
+                const name = input.value.trim();
+                if (name && !BASE_ITEMS.includes(name) && !state.customItems.includes(name)) {
+                    setState({ customItems: [...state.customItems, name], currentModal: null });
+                    triggerAutoSave();
+                } else {
+                    window.closeModal();
+                }
+            }
+        };
+
+        window.onload = () => {
+            loadInventory(state.selectedDate);
+            document.getElementById('btn-input-mode').onclick = () => setState({ mode: 'input' });
+            document.getElementById('btn-report-mode').onclick = () => setState({ mode: 'report' });
+            document.getElementById('btn-settings').onclick = () => window.showModal('settings');
+            render();
+        };
+    </script>
+</body>
+</html>
