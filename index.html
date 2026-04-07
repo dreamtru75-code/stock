@@ -2,162 +2,340 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>식재료 재고 관리 시스템</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>식생활교육관 재고관리 시스템</title>
+    <!-- Tailwind CSS & React Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { background-color: #f3f4f6; }
-        .card { background: white; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800;900&display=swap');
+        
+        body { 
+            font-family: 'Pretendard', sans-serif; 
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            color: #1e293b;
+            overflow-x: hidden;
+        }
+
+        .neo-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 2px 4px -1px rgb(0 0 0 / 0.1);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .active-push:active {
+            transform: scale(0.96);
+        }
+
+        .inventory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+            gap: 0.5rem;
+        }
+
+        .num-pad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; padding: 0 !important; }
+            .print-grid { 
+                display: grid !important; 
+                grid-template-columns: repeat(2, 1fr) !important;
+                border: 1px solid black !important;
+            }
+            .print-item {
+                border: 0.5px solid #000 !important;
+                padding: 6px 10px !important;
+                text-align: center;
+                break-inside: avoid;
+                display: flex !important;
+                justify-content: space-between !important;
+                background: white !important;
+                font-size: 11pt !important;
+            }
+        }
+
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        
+        .animate-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
-<body class="p-4 md:p-8">
-    <div class="max-w-4xl mx-auto">
-        <header class="mb-8 flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-800">🍎 식재료 재고 관리</h1>
-            <button onclick="addNewItem()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-                + 품목 추가
-            </button>
-        </header>
+<body>
+    <div id="root"></div>
 
-        <!-- 재고 현황판 -->
-        <div class="card p-6 mb-6">
-            <h2 class="text-lg font-semibold mb-4 text-gray-700 border-b pb-2">현재 재고 목록</h2>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left">
-                    <thead>
-                        <tr class="text-gray-500 text-sm border-b">
-                            <th class="py-2 px-2">품목명</th>
-                            <th class="py-2 px-2">수량</th>
-                            <th class="py-2 px-2">유통기한</th>
-                            <th class="py-2 px-2">관리</th>
-                        </tr>
-                    </thead>
-                    <tbody id="inventory-list">
-                        <!-- 데이터가 여기에 표시됩니다 -->
-                    </tbody>
-                </table>
-            </div>
-            <div id="empty-msg" class="text-center py-10 text-gray-400 hidden">
-                등록된 재고가 없습니다.
-            </div>
-        </div>
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
 
-        <!-- 안내 문구 -->
-        <div class="text-center text-sm text-gray-500">
-            데이터는 브라우저(localStorage)에 안전하게 저장됩니다.
-        </div>
-    </div>
+        const ICONS = {
+            Plus: (props) => <svg {...props} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+            Check: (props) => <svg {...props} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+            Printer: (props) => <svg {...props} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"/></svg>,
+            Rotate: (props) => <svg {...props} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M4 4v5h5M20 20v-5h-5M20 4.24a10 10 0 101.37 11.23" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+            Trash: (props) => <svg {...props} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+            Calendar: (props) => <svg {...props} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
+            Settings: (props) => <svg {...props} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        };
 
-    <!-- 추가/수정 모달 (임시 알림창으로 대체 가능하나 UI를 위해 제작) -->
-    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl p-6 w-full max-w-md">
-            <h3 id="modal-title" class="text-xl font-bold mb-4">품목 추가</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">품목명</label>
-                    <input type="text" id="item-name" class="w-full border rounded-lg p-2 mt-1" placeholder="예: 사과">
+        const App = () => {
+            const today = new Date().toISOString().split('T')[0];
+            const [mode, setMode] = useState('input'); 
+            const [selectedDate, setSelectedDate] = useState(today);
+            const [inventory, setInventory] = useState({});
+            const [customItems, setCustomItems] = useState([]);
+            const [schoolName, setSchoolName] = useState("학교 이름을 설정하세요");
+            const [activeKeypad, setActiveKeypad] = useState(null);
+            const [isSaving, setIsSaving] = useState(false);
+            const [hasChanges, setHasChanges] = useState(false);
+            const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [newItemName, setNewItemName] = useState("");
+
+            const baseItems = [
+                "양조간장", "고추장", "된장", "쌈장", "국간장", "굴소스", "콩기름", "볶은참깨", "참기름", "고춧가루",
+                "설탕", "굵은소금", "구운소금", "물엿", "식초", "맛술", "후추", "매실액기스",
+                "밀가루", "빵가루", "전분", "찹쌀가루", "부침가루", "튀김가루", "치킨튀김가루", "카레가루",
+                "자장가루", "하이스가루", "마요네즈", "케첩", "들깨가루", "올리브유",
+                "멸치액젓", "새우젓", "우동", "소면", "당면", "조미김가루", "올리고당", "파마산치즈", "배추김치"
+            ];
+
+            const subItems = {
+                "허브류": ["월계수잎", "파슬리", "통계피", "통후추", "바질", "팔각", "정향", "계피가루", "오레가노", "로즈마리"],
+                "드레싱": ["허니머스타드", "오리엔탈", "발사믹", "발사믹글레이즈", "칠리소스", "핫소스"]
+            };
+
+            const allMainItems = useMemo(() => [...baseItems, ...Object.keys(subItems), ...customItems], [customItems]);
+
+            // Load initial data
+            useEffect(() => {
+                const savedItems = localStorage.getItem('school_custom_items');
+                if (savedItems) setCustomItems(JSON.parse(savedItems));
+                const savedSchool = localStorage.getItem('school_name');
+                if (savedSchool) setSchoolName(savedSchool);
+                const savedInv = localStorage.getItem(`inv_${mode === 'input' ? today : selectedDate}`);
+                if (savedInv) setInventory(JSON.parse(savedInv)); else setInventory({});
+                setHasChanges(false);
+            }, [selectedDate, mode, today]);
+
+            // Auto-save effect (1 second debounce)
+            useEffect(() => {
+                if (!hasChanges) return;
+                const timer = setTimeout(() => {
+                    handleSave();
+                }, 1000);
+                return () => clearTimeout(timer);
+            }, [inventory, customItems, schoolName, hasChanges]);
+
+            const handleSave = () => {
+                setIsSaving(true);
+                localStorage.setItem(`inv_${mode === 'input' ? today : selectedDate}`, JSON.stringify(inventory));
+                localStorage.setItem('school_custom_items', JSON.stringify(customItems));
+                localStorage.setItem('school_name', schoolName);
+                setTimeout(() => { 
+                    setIsSaving(false); 
+                    setHasChanges(false); 
+                }, 400);
+            };
+
+            const updateValue = (item, val) => {
+                setInventory(prev => ({ ...prev, [item]: val }));
+                setHasChanges(true);
+            };
+
+            const resetAll = () => {
+                if(confirm('모든 입력 데이터를 초기화할까요?')) {
+                    setInventory({});
+                    setHasChanges(true);
+                }
+            };
+
+            const addNewItem = () => {
+                if (!newItemName.trim() || allMainItems.includes(newItemName)) return;
+                const updated = [...customItems, newItemName.trim()];
+                setCustomItems(updated);
+                setIsAddItemOpen(false); 
+                setNewItemName(""); 
+                setHasChanges(true);
+            };
+
+            const deleteItem = (e, item) => {
+                e.stopPropagation();
+                const updated = customItems.filter(i => i !== item);
+                setCustomItems(updated);
+                const newInv = { ...inventory }; 
+                delete newInv[item]; 
+                setInventory(newInv);
+                setHasChanges(true);
+            };
+
+            return (
+                <div className="max-w-xl mx-auto min-h-screen flex flex-col bg-slate-50">
+                    <header className="bg-slate-900 text-white p-3 sticky top-0 z-50 shadow-lg no-print">
+                        <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-7 h-7 bg-emerald-500 rounded flex items-center justify-center font-black text-white italic text-sm">K</div>
+                                <h1 className="text-lg font-black tracking-tighter">식생활교육관</h1>
+                            </div>
+                            <div className="flex gap-1 bg-slate-800 p-1 rounded-lg">
+                                <button onClick={() => setMode('input')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${mode === 'input' ? 'bg-white text-slate-900 shadow' : 'text-slate-400'}`}>입력</button>
+                                <button onClick={() => setMode('report')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${mode === 'report' ? 'bg-white text-slate-900 shadow' : 'text-slate-400'}`}>영양교사</button>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700 flex-grow">
+                                <ICONS.Calendar className="w-4 h-4 text-emerald-400" />
+                                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="bg-slate-800 font-bold text-xs outline-none w-full text-white appearance-none" style={{ colorScheme: 'dark' }} />
+                            </div>
+                            {mode === 'input' ? (
+                                <div className={`px-4 py-1.5 rounded-xl font-black text-[10px] transition-all flex items-center gap-2 ${isSaving ? "bg-amber-400 text-amber-900" : hasChanges ? "bg-slate-700 text-slate-300" : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"}`}>
+                                    {isSaving ? <span className="flex h-2 w-2 rounded-full bg-amber-600 animate-pulse"></span> : hasChanges ? <span className="flex h-2 w-2 rounded-full bg-slate-500 animate-bounce"></span> : <ICONS.Check className="w-3 h-3" />}
+                                    {isSaving ? "저장 중" : hasChanges ? "입력 중..." : "자동 저장됨"}
+                                </div>
+                            ) : (
+                                <button onClick={() => setIsSettingsOpen(true)} className="w-9 h-9 flex items-center justify-center bg-slate-800 rounded-xl border border-slate-700 text-slate-400 active-push"><ICONS.Settings className="w-5 h-5" /></button>
+                            )}
+                        </div>
+                    </header>
+
+                    <main className="flex-grow p-2 animate-in">
+                        {mode === 'input' ? (
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center px-1">
+                                    <h2 className="text-lg font-black text-slate-800 tracking-tight">학교급식 식재료 재고 관리</h2>
+                                    <div className="flex gap-2">
+                                        <button onClick={resetAll} className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-400 active-push"><ICONS.Rotate className="w-4 h-4"/></button>
+                                        <button onClick={() => setIsAddItemOpen(true)} className="w-8 h-8 flex items-center justify-center bg-slate-900 text-white rounded-lg active-push shadow-md"><ICONS.Plus className="w-5 h-5"/></button>
+                                    </div>
+                                </div>
+                                <div className="inventory-grid">
+                                    {allMainItems.map(item => {
+                                        const isSpecial = !!subItems[item];
+                                        const isCustom = customItems.includes(item);
+                                        const val = isSpecial ? subItems[item].reduce((acc, curr) => acc + (inventory[curr] || 0), 0) : (inventory[item] || 0);
+                                        const hasVal = val > 0;
+                                        return (
+                                            <div key={item} onClick={() => setActiveKeypad(item)} className={`neo-card p-2 h-20 flex flex-col items-center justify-center relative active-push cursor-pointer border-2 transition-all ${hasVal ? 'border-emerald-500 bg-emerald-50/30' : 'border-white'}`}>
+                                                <span className={`text-[11px] font-black leading-tight text-center break-keep px-1 mb-0.5 ${hasVal ? 'text-emerald-900' : 'text-slate-500'}`}>{item}</span>
+                                                <span className={`text-xl font-black ${hasVal ? 'text-emerald-600' : 'text-slate-200'}`}>{val}</span>
+                                                {isCustom && <button onClick={(e) => deleteItem(e, item)} className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center border-2 border-white shadow-md active:scale-75"><ICONS.Trash className="w-3 h-3" /></button>}
+                                                {isSpecial && <div className="absolute bottom-0.5 right-1.5 text-[7px] font-black text-emerald-300">MULTI</div>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm print:p-0 print:border-0 print:shadow-none">
+                                <div className="text-center mb-6 border-b-2 border-slate-900 pb-4">
+                                    <div className="inline-block px-2 py-0.5 bg-emerald-100 text-emerald-700 font-black text-[10px] rounded mb-1 uppercase">{schoolName}</div>
+                                    <h1 className="text-xl font-black tracking-tighter text-slate-900">식재료 재고 현황표</h1>
+                                    <p className="text-sm font-bold text-slate-500 mt-1">{selectedDate} 기준</p>
+                                    <button onClick={() => window.print()} className="mt-4 no-print flex items-center gap-1.5 mx-auto bg-slate-900 text-white px-5 py-2 rounded-full font-bold text-xs active-push shadow-lg">
+                                        <ICONS.Printer className="w-4 h-4" /> 결과 출력
+                                    </button>
+                                </div>
+                                <div className="print-grid grid grid-cols-2 gap-1.5">
+                                    {allMainItems.filter(i => !subItems[i]).map(item => (
+                                        <div key={item} className="print-item border border-slate-100 rounded-lg p-2.5 flex justify-between items-center bg-slate-50/50">
+                                            <span className="font-bold text-slate-700 text-xs">{item}</span>
+                                            <span className="text-base font-black text-slate-900">{inventory[item] || 0}</span>
+                                        </div>
+                                    ))}
+                                    {Object.entries(subItems).map(([cat, list]) => list.map(item => (
+                                        <div key={item} className="print-item border border-slate-100 rounded-lg p-2.5 flex justify-between items-center bg-slate-50/50">
+                                            <span className="font-bold text-slate-700 text-xs">{item}</span>
+                                            <span className="text-base font-black text-slate-900">{inventory[item] || 0}</span>
+                                        </div>
+                                    )))}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Numeric Keypad Modal */}
+                    {activeKeypad && (
+                        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 no-print animate-in">
+                            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setActiveKeypad(null)}></div>
+                            <div className="relative bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 pb-8 shadow-2xl overflow-hidden">
+                                <div className="flex justify-between items-center mb-5">
+                                    <h3 className="text-xl font-black text-slate-900">{activeKeypad}</h3>
+                                    <button onClick={() => setActiveKeypad(null)} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400"><ICONS.Plus className="rotate-45 w-5 h-5"/></button>
+                                </div>
+                                {subItems[activeKeypad] ? (
+                                    <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+                                        {subItems[activeKeypad].map(sub => (
+                                            <div key={sub} className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                                                <span className="font-black text-slate-700 text-sm w-1/3">{sub}</span>
+                                                <div className="flex gap-1.5 flex-1 justify-end">
+                                                    {[0, 0.5, 1, 2].map(n => (
+                                                        <button key={n} onClick={() => updateValue(sub, n)} className={`w-10 h-10 text-xs font-black rounded-lg border-2 transition-all ${inventory[sub] === n ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-white border-slate-100 text-slate-400 active-push'}`}>
+                                                            {n}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="num-pad-grid">
+                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0.5, 0, 10].map(n => (
+                                            <button key={n} onClick={() => { updateValue(activeKeypad, n); setActiveKeypad(null); }} className={`h-14 rounded-xl text-xl font-black border-2 transition-all ${inventory[activeKeypad] === n ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-slate-50 text-slate-500 border-slate-100 active-push'}`}>
+                                                {n}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Settings Modal */}
+                    {isSettingsOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 no-print animate-in">
+                            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)}></div>
+                            <div className="relative bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl">
+                                <h3 className="text-xl font-black text-slate-900 mb-4 text-center">기관 설정</h3>
+                                <input type="text" value={schoolName} onChange={(e) => { setSchoolName(e.target.value); setHasChanges(true); }} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none font-black text-lg text-center focus:border-emerald-500" placeholder="학교명 입력" />
+                                <button onClick={() => setIsSettingsOpen(false)} className="w-full mt-6 py-4 bg-slate-900 text-white font-black rounded-xl active-push">닫기</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Add Item Modal */}
+                    {isAddItemOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 no-print animate-in">
+                            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setIsAddItemOpen(false)}></div>
+                            <div className="relative bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl text-center">
+                                <h3 className="text-xl font-black text-slate-900 mb-4">신규 품목 추가</h3>
+                                <input type="text" placeholder="품목명" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none font-black text-lg text-center focus:border-emerald-500" onKeyPress={(e) => e.key === 'Enter' && addNewItem()} />
+                                <div className="flex gap-2 mt-6">
+                                    <button onClick={() => setIsAddItemOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-400 font-bold rounded-xl">취소</button>
+                                    <button onClick={addNewItem} className="flex-1 py-3 bg-emerald-500 text-white font-black rounded-xl">추가</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">수량</label>
-                    <input type="number" id="item-count" class="w-full border rounded-lg p-2 mt-1" placeholder="0">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">유통기한</label>
-                    <input type="date" id="item-date" class="w-full border rounded-lg p-2 mt-1">
-                </div>
-            </div>
-            <div class="mt-6 flex space-x-3">
-                <button onclick="closeModal()" class="flex-1 bg-gray-200 py-2 rounded-lg">취소</button>
-                <button onclick="saveItem()" class="flex-1 bg-blue-600 text-white py-2 rounded-lg">저장</button>
-            </div>
-        </div>
-    </div>
+            );
+        };
 
-    <script>
-        let inventory = JSON.parse(localStorage.getItem('stock_data')) || [];
-        let editingIndex = -1;
-
-        function render() {
-            const list = document.getElementById('inventory-list');
-            const emptyMsg = document.getElementById('empty-msg');
-            list.innerHTML = '';
-
-            if (inventory.length === 0) {
-                emptyMsg.classList.remove('hidden');
-            } else {
-                emptyMsg.classList.add('hidden');
-                inventory.forEach((item, index) => {
-                    const tr = document.createElement('tr');
-                    tr.className = 'border-b hover:bg-gray-50 transition';
-                    tr.innerHTML = `
-                        <td class="py-3 px-2 font-medium">${item.name}</td>
-                        <td class="py-3 px-2">${item.count}개</td>
-                        <td class="py-3 px-2 text-sm text-gray-600">${item.date || '-'}</td>
-                        <td class="py-3 px-2">
-                            <button onclick="editItem(${index})" class="text-blue-500 mr-2 text-sm">수정</button>
-                            <button onclick="deleteItem(${index})" class="text-red-500 text-sm">삭제</button>
-                        </td>
-                    `;
-                    list.appendChild(tr);
-                });
-            }
-            localStorage.setItem('stock_data', JSON.stringify(inventory));
-        }
-
-        function addNewItem() {
-            editingIndex = -1;
-            document.getElementById('modal-title').innerText = "품목 추가";
-            document.getElementById('item-name').value = '';
-            document.getElementById('item-count').value = '';
-            document.getElementById('item-date').value = '';
-            document.getElementById('modal').classList.remove('hidden');
-        }
-
-        function closeModal() {
-            document.getElementById('modal').classList.add('hidden');
-        }
-
-        function saveItem() {
-            const name = document.getElementById('item-name').value;
-            const count = document.getElementById('item-count').value;
-            const date = document.getElementById('item-date').value;
-
-            if (!name) {
-                alert('품목명을 입력해주세요.');
-                return;
-            }
-
-            const itemData = { name, count, date };
-
-            if (editingIndex > -1) {
-                inventory[editingIndex] = itemData;
-            } else {
-                inventory.push(itemData);
-            }
-
-            render();
-            closeModal();
-        }
-
-        function editItem(index) {
-            editingIndex = index;
-            const item = inventory[index];
-            document.getElementById('modal-title').innerText = "품목 수정";
-            document.getElementById('item-name').value = item.name;
-            document.getElementById('item-count').value = item.count;
-            document.getElementById('item-date').value = item.date;
-            document.getElementById('modal').classList.remove('hidden');
-        }
-
-        function deleteItem(index) {
-            if (confirm('정말 삭제하시겠습니까?')) {
-                inventory.splice(index, 1);
-                render();
-            }
-        }
-
-        // 초기 실행
-        window.onload = render;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
